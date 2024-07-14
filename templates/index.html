@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Checker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            /* justify-content: center;
+            align-items: center;
+            height: 100vh; */
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            width: 30vh;
+            height: 6vh;
+            background: #200ab0;
+            color: #fff;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #000000;
+        }
+        .results {
+            margin-top: 20px;
+            text-align: left;
+        }
+        /* .results table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        } */
+        .results th, .results td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .results th {
+            background-color: #f4f4f4;
+        }
+        .action-btn {
+            margin: 0 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 3px;
+        }
+        .copy-btn {
+            background-color: #28a745;
+            color: white;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Proxy Checker</h1>
+        <textarea id="proxyInput" placeholder="Enter proxy strings, one per line" rows="10"></textarea>
+        <button onclick="checkProxies()">Check Proxies</button>
+        <div class="results" id="results">
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Proxy</th>
+                        <th>Actions</th>
+                        <th>Fraud Score</th>
+                        <th>Status</th>
+                        <th>IPv4</th>
+                        <th>IPv6</th>
+                        <th>Country</th>
+                        <th>Country Code</th>
+                        <th>State Code</th>
+                        <th>State Name</th>
+                        <th>City</th>
+                        <th>ISP</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        let rowNumber = 1;
+
+        function checkProxies() {
+            const proxyInput = document.getElementById('proxyInput').value;
+            const proxies = proxyInput.split('\n').map(p => p.trim()).filter(p => p);
+            const batchSize = 5;
+            const batches = [];
+
+            for (let i = 0; i < proxies.length; i += batchSize) {
+                batches.push(proxies.slice(i, i + batchSize));
+            }
+
+            processBatches(batches);
+        }
+
+        async function processBatches(batches) {
+            for (const batch of batches) {
+                await Promise.all(batch.map(proxy => checkProxy(proxy)));
+            }
+        }
+
+        async function checkProxy(proxy) {
+            try {
+                const response = await fetch('/proxy', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ proxy })
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    displayResult(data, rowNumber++);
+                }
+            } catch (error) {
+                alert('An error occurred: ' + error);
+            }
+        }
+
+        function displayResult(result, rowNumber) {
+            const resultsTbody = document.querySelector("#results tbody");
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${rowNumber}</td>
+                <td>${result.proxies}</td>
+                <td>
+                    <button class="action-btn copy-btn" data-proxy="${result.proxies}">Copy</button>
+                    <p></p>
+                    <button class="action-btn delete-btn">Delete</button>
+                </td>
+                <td>${result.ipqs_response.fraud_score}</td>
+                <td>${result.ipqs_response.message}</td>
+                <td>${result.ip_api_response.query}</td>
+                <td>${result.pixelscan_response.value.publicIp}</td>
+                <td>${result.ip_api_response.country}</td>
+                <td>${result.ip_api_response.countryCode}</td>
+                <td>${result.ip_api_response.region}</td>
+                <td>${result.ip_api_response.regionName}</td>
+                <td>${result.ip_api_response.city}</td>
+                <td>${result.ip_api_response.org || ''}</td>
+            `;
+            resultsTbody.appendChild(row);
+
+            // Add event listener for copy button
+            row.querySelector(".copy-btn").addEventListener("click", (e) => {
+                const proxy = e.target.getAttribute("data-proxy");
+                copyToClipboard(proxy);
+            });
+
+            // Add event listener for delete button
+            row.querySelector(".delete-btn").addEventListener("click", () => {
+                row.remove();
+            });
+        }
+
+        function copyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('Proxy copied to clipboard: ' + text);
+        }
+    </script>
+</body>
+</html>
